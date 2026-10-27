@@ -1,0 +1,6 @@
+bin/
+probe/
+*.o
+*.dSYM/
+.DS_Store
+tools/
