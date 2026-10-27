@@ -1,0 +1,85 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  ARCH_FLAGS: "-arch arm64 -arch x86_64"
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          clang --version | head -1
+
+      - name: Build (universal)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$VERSION" BUILD="$GITHUB_RUN_NUMBER" ./build.sh
+          echo "--- architectures ---"
+          lipo -info bin/tbright
+          lipo -info bin/TouchBarBrightness.app/Contents/MacOS/TouchBarBrightness
+
+      - name: Smoke test
+        run: |
+          ./bin/tbright help | head -5
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+            bin/TouchBarBrightness.app/Contents/Info.plist
+
+      - name: Package
+        run: |
+          STAGE="tbright-macos-universal"
+          rm -rf "$STAGE" dist
+          mkdir -p "$STAGE" dist
+          cp -R bin/TouchBarBrightness.app "$STAGE/"
+          cp bin/tbright README.md install-agent.sh "$STAGE/"
+          ditto -c -k --sequesterRsrc --keepParent "$STAGE" "dist/$STAGE.zip"
+          (cd dist && shasum -a 256 "$STAGE.zip" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tbright-macos-universal
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tbright-macos-universal
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/tbright-macos-universal.zip \
+            dist/SHA256SUMS.txt \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

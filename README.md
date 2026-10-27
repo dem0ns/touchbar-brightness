@@ -1,5 +1,7 @@
 # TouchBarBrightness
 
+[![build](https://github.com/dem0ns/touchbar-brightness/actions/workflows/build.yml/badge.svg)](https://github.com/dem0ns/touchbar-brightness/actions/workflows/build.yml)
+
 在 macOS 上控制 MacBook Pro Touch Bar 的背光亮度 —— 通过伪造环境光传感器读数实现。
 
 macOS 没有公开的 Touch Bar 亮度接口，User-space 直接调背光的所有路径都被
@@ -24,10 +26,26 @@ ALS → Touch Bar 背光曲线
 - 有效范围约 **1–5000 lux**，更大的值会被钳到 5000
 - 值存在 `corebrightnessd` 的内存里，跨进程/跨 App 退出都有效
 
+## 下载安装
+
+从 [Releases](https://github.com/dem0ns/touchbar-brightness/releases) 下载
+`tbright-macos-universal.zip`（arm64 + x86_64 通用二进制），解压后：
+
+```sh
+xattr -dr com.apple.quarantine tbright TouchBarBrightness.app
+./tbright set 80
+open TouchBarBrightness.app
+./install-agent.sh          # 可选：登录后自动恢复
+```
+
+> 二进制是 ad-hoc 签名、未做 Apple 公证，首次运行可能被 Gatekeeper 拦下，
+> 上面那条 `xattr` 就是用来去掉隔离标记的。
+
 ## 构建
 
 ```sh
-./build.sh
+./build.sh                                          # 本机架构
+ARCH_FLAGS="-arch arm64 -arch x86_64" ./build.sh    # 通用二进制
 ```
 
 产物：

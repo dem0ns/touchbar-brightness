@@ -2,11 +2,16 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# ARCH_FLAGS lets CI produce a universal binary:
+#   ARCH_FLAGS="-arch arm64 -arch x86_64" ./build.sh
+ARCH_FLAGS="${ARCH_FLAGS:-}"
+MIN_FLAGS="-mmacosx-version-min=${MACOSX_DEPLOYMENT_TARGET:-11.0}"
+CFLAGS=($ARCH_FLAGS $MIN_FLAGS -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter)
+
 mkdir -p bin
 
 echo "==> building CLI"
-clang -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter \
-    -framework Foundation -framework IOKit \
+clang "${CFLAGS[@]}" -framework Foundation \
     -o bin/tbright src/tbright.m src/TBCore.m
 
 echo "==> building menu bar app"
@@ -14,8 +19,7 @@ APP="bin/TouchBarBrightness.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-clang -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter \
-    -framework Cocoa -framework Foundation -framework IOKit \
+clang "${CFLAGS[@]}" -framework Cocoa -framework Foundation \
     -o "$APP/Contents/MacOS/TouchBarBrightness" src/tbapp.m src/TBCore.m
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -28,8 +32,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.dem0ns.TouchBarBrightness</string>
     <key>CFBundleExecutable</key><string>TouchBarBrightness</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+    <key>CFBundleVersion</key><string>__BUILD__</string>
     <key>LSMinimumSystemVersion</key><string>11.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
@@ -37,8 +41,13 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+VERSION="${VERSION:-0.0.0}"
+BUILD="${BUILD:-1}"
+sed -i '' "s/__VERSION__/$VERSION/; s/__BUILD__/$BUILD/" "$APP/Contents/Info.plist"
 
-echo "==> done"
+codesign --force --sign - "$APP" >/dev/null 2>&1 || true
+codesign --force --sign - bin/tbright >/dev/null 2>&1 || true
+
+echo "==> done (version $VERSION)"
 echo "    CLI : $(pwd)/bin/tbright"
 echo "    App : $(pwd)/$APP"

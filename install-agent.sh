@@ -22,13 +22,17 @@ if [ "${1:-}" = "--uninstall" ]; then
     exit 0
 fi
 
-if [ ! -x "bin/tbright" ]; then
-    echo "找不到 bin/tbright，先运行 ./build.sh" >&2
+if [ -x "bin/tbright" ]; then
+    SRC="bin/tbright"          # building from source
+elif [ -x "tbright" ]; then
+    SRC="tbright"              # unpacked release archive
+else
+    echo "找不到 tbright（先运行 ./build.sh 或解压 release 包）" >&2
     exit 1
 fi
 
 mkdir -p "$DIR" "$HOME/Library/LaunchAgents"
-cp bin/tbright "$BIN"
+cp "$SRC" "$BIN"
 chmod +x "$BIN"
 
 cat > "$PLIST" <<PLIST
